@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pipeline Analyzer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="hero">
+    <div class="hero__content">
+      <h1>Pipeline Analyzer</h1>
+      <div class="upload">
+        <label class="upload__button">
+          <input id="fileInput" type="file" accept=".csv,text/csv" />
+          Upload CSV
+        </label>
+        <span id="fileName" class="upload__name">No file loaded</span>
+      </div>
+    </div>
+    <div class="hero__panel">
+      <div class="panel__metric">
+        <span class="label">Opportunities</span>
+        <span id="metricCount" class="value">0</span>
+      </div>
+      <div class="panel__metric">
+        <span class="label">Total Assisted iARR</span>
+        <span id="metricTotal" class="value">$0</span>
+      </div>
+      <div class="panel__metric">
+        <span class="label">Avg Deal Size</span>
+        <span id="metricAvg" class="value">$0</span>
+      </div>
+      <div class="panel__metric">
+        <span class="label">Median Age</span>
+        <span id="metricMedianAge" class="value">0d</span>
+      </div>
+      <div class="panel__metric">
+        <span class="label">Past Due</span>
+        <span id="metricPastDue" class="value">0</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="controls">
+      <div class="control">
+        <label>Owner</label>
+        <select id="ownerFilter"></select>
+      </div>
+      <div class="control">
+        <label>Stage</label>
+        <select id="stageFilter"></select>
+      </div>
+      <div class="control">
+        <label>Manager Judgment</label>
+        <select id="judgmentFilter"></select>
+      </div>
+      <div class="control">
+        <label>Close Date</label>
+        <select id="dateRangeFilter">
+          <option value="all">All</option>
+          <option value="7">Next 7 days</option>
+          <option value="14">Next 14 days</option>
+          <option value="30">Next 30 days</option>
+          <option value="60">Next 60 days</option>
+          <option value="overdue">Past due</option>
+        </select>
+      </div>
+      <div class="control">
+        <label>Search</label>
+        <input id="searchFilter" type="search" placeholder="Account or opportunity" />
+      </div>
+      <div class="control control--button">
+        <button id="resetFilters">Reset filters</button>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <h2>Stage Totals</h2>
+        <canvas id="stageChart"></canvas>
+        <div id="stageTooltip" class="chart-tooltip" aria-hidden="true"></div>
+      </div>
+      <div class="card">
+        <h2>Judgment Funnel</h2>
+        <canvas id="judgmentChart"></canvas>
+      </div>
+      <div class="card">
+        <h2>Walk in and C&C Pipe</h2>
+        <canvas id="walkInChart"></canvas>
+        <div id="walkInTooltip" class="chart-tooltip" aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <section class="table">
+      <div class="table__header">
+        <h2>Opportunity Detail</h2>
+        <div class="table__meta" id="tableMeta">0 rows</div>
+      </div>
+      <div class="table__scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Opportunity</th>
+              <th>Account</th>
+              <th>Owner</th>
+              <th>Quota Relief</th>
+              <th>Assisted iARR</th>
+              <th>Stage</th>
+              <th>Manager Judgment</th>
+              <th>Close Date</th>
+              <th>Next Step Date</th>
+              <th>Next Step</th>
+              <th>Sales Notes</th>
+              <th>Created Date</th>
+              <th>Age (days)</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Built for Salesforce pipeline exports. Dates parsed as MM/DD/YYYY. Currency totals use Total Quota Relief.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
