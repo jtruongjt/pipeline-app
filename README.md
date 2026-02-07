@@ -31,4 +31,3 @@ A lightweight, no-build web app for analyzing Salesforce pipeline CSV exports. U
 ## Notes
 - Dates are parsed as `MM/DD/YYYY`.
 - Currency values are summed and displayed with two decimals.
-

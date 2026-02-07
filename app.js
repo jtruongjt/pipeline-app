@@ -108,11 +108,52 @@ function parseCsv(text) {
 
 function parseDate(value) {
   if (!value) return null;
-  const parts = value.split("/");
-  if (parts.length !== 3) return null;
-  const [month, day, year] = parts.map((part) => Number(part));
-  if (!month || !day || !year) return null;
-  return new Date(year, month - 1, day);
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  function asDate(year, month, day) {
+    const y = Number(year);
+    const m = Number(month);
+    const d = Number(day);
+    if (!y || !m || !d) return null;
+    const date = new Date(y, m - 1, d);
+    if (
+      date.getFullYear() !== y ||
+      date.getMonth() !== m - 1 ||
+      date.getDate() !== d
+    ) {
+      return null;
+    }
+    return date;
+  }
+
+  const usOrDashed = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})(?:\D.*)?$/);
+  if (usOrDashed) {
+    const month = Number(usOrDashed[1]);
+    const day = Number(usOrDashed[2]);
+    let year = Number(usOrDashed[3]);
+    if (year < 100) year += 2000;
+    return asDate(year, month, day);
+  }
+
+  const isoLike = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:\D.*)?$/);
+  if (isoLike) {
+    return asDate(isoLike[1], isoLike[2], isoLike[3]);
+  }
+
+  // Support Excel date serials that occasionally show up in CSV exports.
+  if (/^\d{5}(?:\.\d+)?$/.test(raw)) {
+    const serial = Number(raw);
+    if (Number.isFinite(serial)) {
+      const base = new Date(Date.UTC(1899, 11, 30));
+      const date = new Date(base.getTime() + Math.floor(serial) * 86400000);
+      return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+    }
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
 }
 
 function parseNumber(value) {
@@ -146,6 +187,7 @@ function buildRows(records) {
       closeDateRaw: record["Close Date"],
       nextStep: record["Next Step"],
       nextStepDate,
+      nextStepDateRaw: record["Next Step Date"],
       createdDate,
       age,
       total,
@@ -271,12 +313,8 @@ function drawBarChart(canvas, labels, values, options = {}) {
 
     ctx.fillStyle = "#5f5b5f";
     ctx.font = "12px 'Space Grotesk', sans-serif";
-    ctx.save();
-    ctx.translate(x + barWidth / 2, height - padding + 10);
-    ctx.rotate(-0.4);
     ctx.textAlign = "center";
-    ctx.fillText(label, 0, 0);
-    ctx.restore();
+    ctx.fillText(label, x + barWidth / 2, height - padding + 14);
   });
 
   return { rects, padding, barWidth, height, width };
@@ -410,24 +448,26 @@ function updateTable() {
     const tr = document.createElement("tr");
     const closePastDue = row.closeDate && row.closeDate < today;
     const nextStepPastDue = row.nextStepDate && row.nextStepDate < today;
-    const missingNextStep = !row.nextStepDate && !row.nextStep;
+    const missingNextStep = !row.nextStep || !row.nextStep.trim();
+    const missingSalesNotes = !row.notes || !row.notes.trim();
+    const bothDatesPastDue = Boolean(closePastDue && nextStepPastDue);
+    const missingActionContext = missingNextStep || missingSalesNotes;
 
-    if (closePastDue || nextStepPastDue) {
+    if (closePastDue || nextStepPastDue || (bothDatesPastDue && missingActionContext)) {
       tr.classList.add("row--past-due");
     }
-    if (missingNextStep) {
+    if ((bothDatesPastDue && missingActionContext) || (!row.nextStepDate && missingNextStep)) {
       tr.classList.add("row--missing-next");
     }
     tr.innerHTML = `
       <td>${row.name || ""}</td>
-      <td>${row.account || ""}</td>
       <td>${row.owner || ""}</td>
       <td>${currencyFormatter.format(row.total)}</td>
       <td>${currencyFormatter.format(row.assisted)}</td>
       <td>${row.stage || ""}</td>
       <td>${row.judgment || ""}</td>
       <td class="${closePastDue ? "cell--past-due" : ""}">${row.closeDateRaw || ""}</td>
-      <td class="${nextStepPastDue ? "cell--past-due" : ""}">${row.nextStepDate ? row.nextStepDate.toLocaleDateString("en-US") : ""}</td>
+      <td class="${nextStepPastDue ? "cell--past-due" : ""}">${row.nextStepDate ? row.nextStepDate.toLocaleDateString("en-US") : (row.nextStepDateRaw || "")}</td>
       <td>${row.nextStep || ""}</td>
       <td>${row.notes || ""}</td>
       <td>${row.createdDate ? row.createdDate.toLocaleDateString("en-US") : ""}</td>
