@@ -300,6 +300,31 @@ main {
   letter-spacing: 0.05em;
 }
 
+.table th[data-sort-key] {
+  cursor: pointer;
+  user-select: none;
+}
+
+.table th[data-sort-key]::after {
+  content: " \2195";
+  opacity: 0.48;
+  font-size: 0.88em;
+}
+
+.table th[data-sort-key]:hover {
+  background: #e6f1ff;
+}
+
+.table th[data-sort-direction="asc"]::after {
+  content: " \2191";
+  opacity: 1;
+}
+
+.table th[data-sort-direction="desc"]::after {
+  content: " \2193";
+  opacity: 1;
+}
+
 .table th:nth-child(1),
 .table td:nth-child(1) { width: 11%; }
 .table th:nth-child(2),

@@ -21,6 +21,11 @@ const walkInTooltip = document.getElementById("walkInTooltip");
 
 const tableBody = document.getElementById("tableBody");
 const tableMeta = document.getElementById("tableMeta");
+const sortableHeaders = [...document.querySelectorAll("th[data-sort-key]")];
+const STORAGE_KEYS = {
+  csvText: "pipelineAnalyzer.lastCsvText",
+  fileName: "pipelineAnalyzer.lastFileName",
+};
 
 const state = {
   rows: [],
@@ -43,6 +48,10 @@ const state = {
     assistedTotals: [],
     monthKeys: [],
   },
+  sort: {
+    key: null,
+    direction: "asc",
+  },
 };
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -55,6 +64,21 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
 const numberFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 1,
 });
+
+const SORTABLE_COLUMN_TYPES = {
+  name: "string",
+  owner: "string",
+  total: "number",
+  assisted: "number",
+  stage: "string",
+  judgment: "string",
+  closeDate: "date",
+  nextStepDate: "date",
+  nextStep: "string",
+  notes: "string",
+  createdDate: "date",
+  age: "number",
+};
 
 function parseCsv(text) {
   const rows = [];
@@ -216,6 +240,102 @@ function getSelectedValue(select) {
   return select.value && select.value !== "all" ? select.value : null;
 }
 
+function getSortValue(row, key) {
+  if (!key) return null;
+  return row[key];
+}
+
+function isEmptySortValue(value) {
+  return value === null || value === undefined || value === "";
+}
+
+function compareSortValues(a, b, type, direction) {
+  const aEmpty = isEmptySortValue(a);
+  const bEmpty = isEmptySortValue(b);
+  if (aEmpty && bEmpty) return 0;
+  if (aEmpty) return 1;
+  if (bEmpty) return -1;
+
+  const factor = direction === "asc" ? 1 : -1;
+
+  if (type === "number") {
+    return (a - b) * factor;
+  }
+
+  if (type === "date") {
+    return (a.getTime() - b.getTime()) * factor;
+  }
+
+  return String(a).localeCompare(String(b), undefined, { sensitivity: "base" }) * factor;
+}
+
+function sortFilteredRows() {
+  const { key, direction } = state.sort;
+  if (!key || !SORTABLE_COLUMN_TYPES[key]) return;
+
+  const type = SORTABLE_COLUMN_TYPES[key];
+  state.filtered = state.filtered
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => {
+      const cmp = compareSortValues(
+        getSortValue(a.row, key),
+        getSortValue(b.row, key),
+        type,
+        direction
+      );
+      if (cmp !== 0) return cmp;
+      return a.index - b.index;
+    })
+    .map((entry) => entry.row);
+}
+
+function updateSortHeaders() {
+  sortableHeaders.forEach((header) => {
+    const key = header.dataset.sortKey;
+    if (!key || key !== state.sort.key) {
+      header.dataset.sortDirection = "none";
+      header.setAttribute("aria-sort", "none");
+      return;
+    }
+
+    header.dataset.sortDirection = state.sort.direction;
+    header.setAttribute(
+      "aria-sort",
+      state.sort.direction === "asc" ? "ascending" : "descending"
+    );
+  });
+}
+
+function initTableSorting() {
+  sortableHeaders.forEach((header) => {
+    header.tabIndex = 0;
+    header.setAttribute("aria-sort", "none");
+
+    const toggleSort = () => {
+      const key = header.dataset.sortKey;
+      if (!key) return;
+
+      if (state.sort.key === key) {
+        state.sort.direction = state.sort.direction === "asc" ? "desc" : "asc";
+      } else {
+        state.sort.key = key;
+        state.sort.direction = "asc";
+      }
+
+      applyFilters();
+    };
+
+    header.addEventListener("click", toggleSort);
+    header.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      toggleSort();
+    });
+  });
+
+  updateSortHeaders();
+}
+
 function applyFilters() {
   const owner = getSelectedValue(ownerFilter);
   const stage = getSelectedValue(stageFilter);
@@ -254,6 +374,7 @@ function applyFilters() {
     return true;
   });
 
+  sortFilteredRows();
   render();
 }
 
@@ -483,6 +604,7 @@ function render() {
   updateMetrics();
   updateCharts();
   updateTable();
+  updateSortHeaders();
 }
 
 function initFilters() {
@@ -495,17 +617,56 @@ function initFilters() {
   populateFilter(judgmentFilter, judgments);
 }
 
+function setDataset(records, displayName) {
+  state.rows = buildRows(records);
+  state.filtered = [...state.rows];
+  fileName.textContent = displayName || "Loaded data";
+  initFilters();
+  render();
+}
+
+function saveDatasetToStorage(csvText, displayName) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.csvText, csvText);
+    localStorage.setItem(STORAGE_KEYS.fileName, displayName || "Uploaded CSV");
+  } catch (error) {
+    // Ignore storage failures (quota/privacy mode) and continue in-memory.
+  }
+}
+
+function loadDatasetFromStorage() {
+  let storedText;
+  let storedName;
+  try {
+    storedText = localStorage.getItem(STORAGE_KEYS.csvText);
+    storedName = localStorage.getItem(STORAGE_KEYS.fileName);
+  } catch (error) {
+    return;
+  }
+
+  if (!storedText || !storedText.trim()) return;
+
+  try {
+    const records = parseCsv(storedText);
+    setDataset(records, storedName || "Saved CSV");
+  } catch (error) {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.csvText);
+      localStorage.removeItem(STORAGE_KEYS.fileName);
+    } catch (cleanupError) {
+      // Ignore cleanup failures.
+    }
+  }
+}
+
 function handleFile(file) {
   if (!file) return;
-  fileName.textContent = file.name;
   const reader = new FileReader();
   reader.onload = (event) => {
     const text = event.target.result;
     const records = parseCsv(text);
-    state.rows = buildRows(records);
-    state.filtered = [...state.rows];
-    initFilters();
-    render();
+    setDataset(records, file.name);
+    saveDatasetToStorage(text, file.name);
   };
   reader.readAsText(file);
 }
@@ -714,3 +875,6 @@ judgmentCanvas.addEventListener("click", (event) => {
   state.judgmentKey = state.judgmentKey === judgmentKey ? null : judgmentKey;
   applyFilters();
 });
+
+loadDatasetFromStorage();
+initTableSorting();
